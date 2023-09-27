@@ -56,7 +56,7 @@ function GenerateReadableStatusCode(code: number) {
         case 410:
             return "Gone :)";
         default:
-            return "deez";
+            throw "Idk, figure out";
     }
 }
 
@@ -112,7 +112,7 @@ console.log(
     `#revoltchat server status:\n${statuses
         .map(
             v =>
-                `${v.instance.toLocaleUpperCase()}: ${GenerateReadableStatusCode(v.status)} in ${
+                `${v.instance.toUpperCase()}: ${GenerateReadableStatusCode(v.status)} in ${
                     v.responseTime
                 }ms`,
         )
