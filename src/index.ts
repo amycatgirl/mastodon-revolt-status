@@ -1,12 +1,20 @@
 // import { createRestAPIClient } from "masto";
-// import { Cron } from "croner";
+import { Cron } from "croner";
 
 // const masto = createRestAPIClient({
 //     url: "",
 //     accessToken: "",
 // });
 
-const validInstances = ["vortex", "delta", "autumn", "january", "static", "client", "landing"];
+const validInstances = [
+    { name: "vortex", url: "https://vortex.revolt.chat" },
+    { name: "delta", url: "https://api.revolt.chat" },
+    { name: "autumn", url: "https://autumn.revolt.chat" },
+    { name: "january", url: "https://jan.revolt.chat" },
+    { name: "static", url: "https://static.revolt.chat/emoji/mutant/1f97a.svg?rev=3" },
+    { name: "client", url: "https://app.revolt.chat" },
+    { name: "landing", url: "https://revolt.chat" },
+];
 
 type instance = (typeof validInstances)[number];
 interface responseInformation {
@@ -60,64 +68,45 @@ function GenerateReadableStatusCode(code: number) {
     }
 }
 
-async function CheckServerStatus(serverToCheck: instance) {
-    switch (serverToCheck) {
-        case "autumn":
-            return await PingServerWithResponseTime("https://autumn.revolt.chat/");
-        case "january":
-            return await PingServerWithResponseTime("https://jan.revolt.chat/");
-        case "delta":
-            return await PingServerWithResponseTime("https://api.revolt.chat/");
-        case "vortex":
-            return await PingServerWithResponseTime("https://vortex.revolt.chat/");
-        case "landing":
-            return await PingServerWithResponseTime("https://revolt.chat/");
-        case "client":
-            return await PingServerWithResponseTime("https://app.revolt.chat/");
-        case "static":
-            return await PingServerWithResponseTime(
-                "https://static.revolt.chat/emoji/mutant/1f97a.svg?rev=3",
-            );
-        default:
-            throw "Invalid Instance";
+async function CheckServerStatus(serverToCheck: instance): Promise<responseInformation> {
+    const responseFromServer = await PingServerWithResponseTime(serverToCheck.url);
+
+    if (!responseFromServer) throw `Could not get a response from ${serverToCheck.name}`;
+
+    return responseFromServer;
+}
+
+async function GenerateMessage() {
+    console.log("Checking servers...");
+    const statuses: (responseInformation & { instance: string })[] | undefined = [];
+    for await (const instance of validInstances) {
+        await CheckServerStatus(instance).then(res => {
+            console.log(instance.name, res);
+            statuses.push({
+                instance: instance.name,
+                responseTime: res.responseTime,
+                status: res.status,
+            });
+        });
     }
+
+    console.log("Status array", statuses);
+
+    console.log(
+        `#revoltchat server status:\n${statuses
+            .map(
+                value =>
+                    `${value.instance.toUpperCase()}: ${GenerateReadableStatusCode(
+                        value.status,
+                    )} in ${value.responseTime}ms`,
+            )
+            .join("\n")}`,
+    );
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-// const checkJob = Cron("0 * * * *", async () => {
-//     console.log("Checking servers...");
-//     const statuses: (responseInformation & { instance: string })[] | undefined = [];
-//     for await (const instance of validInstances) {
-//         await CheckServerStatus(instance).then(res => {
-//             console.log(instance, res);
-//             statuses.push({ instance, responseTime: res.responseTime, status: res.status });
-//         });
-//     }
+const checkJob = Cron("0 * * * *", GenerateMessage);
 
-//     console.log("Status array", statuses);
-// });
-
-console.log("Checking servers...");
-const statuses: (responseInformation & { instance: string })[] | undefined = [];
-for await (const instance of validInstances) {
-    await CheckServerStatus(instance).then(res => {
-        console.log(instance, res);
-        statuses.push({ instance, responseTime: res.responseTime, status: res.status });
-    });
-}
-
-console.log("Status array", statuses);
-
-console.log(
-    `#revoltchat server status:\n${statuses
-        .map(
-            v =>
-                `${v.instance.toUpperCase()}: ${GenerateReadableStatusCode(v.status)} in ${
-                    v.responseTime
-                }ms`,
-        )
-        .join("\n")}`,
-);
 // await masto.v1.statuses.create({
 //     visibility: "unlisted",
 //     status:
