@@ -1,10 +1,12 @@
-// import { createRestAPIClient } from "masto";
+import { createRestAPIClient } from "masto";
 import { Cron } from "croner";
+import * as process from "process";
 
-// const masto = createRestAPIClient({
-//     url: "",
-//     accessToken: "",
-// });
+const env: NodeJS.ProcessEnv & {
+    ACCESS_TOKEN?: string;
+    MASTODON_URL?: string;
+    DISABLE_MASTO?: boolean;
+} = process.env;
 
 const validInstances = [
     { name: "vortex", url: "https://vortex.revolt.chat" },
@@ -28,7 +30,6 @@ async function PingServerWithResponseTime(
 ): Promise<responseInformation> {
     const controller: AbortController = new AbortController();
     let startTime = 0;
-    let info: responseInformation | undefined;
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const timeoutID = setTimeout(
@@ -38,15 +39,14 @@ async function PingServerWithResponseTime(
 
     startTime = Date.now();
 
-    await fetch(server, { signal: controller.signal }).then(res => {
-        info = {
+    return await fetch(server, { signal: controller.signal }).then(res => {
+        clearTimeout(timeoutID);
+
+        return {
             status: res.status,
             responseTime: Date.now() - startTime,
         };
     });
-
-    if (!info) throw "No information about this request";
-    return info;
 }
 
 function GenerateReadableStatusCode(code: number) {
@@ -92,22 +92,47 @@ async function GenerateMessage() {
 
     console.log("Status array", statuses);
 
-    console.log(
-        `#revoltchat server status:\n${statuses
-            .map(
-                value =>
-                    `${value.instance.toUpperCase()}: ${GenerateReadableStatusCode(
-                        value.status,
-                    )} in ${value.responseTime}ms`,
-            )
-            .join("\n")}`,
-    );
+    const statusPerServer = statuses
+        .map(
+            value =>
+                `${value.instance.toUpperCase()}: ${GenerateReadableStatusCode(value.status)} in ${
+                    value.responseTime
+                }ms`,
+        )
+        .join("\n");
+
+    return `#revoltchat server status:\n${statusPerServer}`;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const checkJob = Cron("0 * * * *", GenerateMessage);
+const checkJob = Cron("@hourly", {
+    catch: (e, job) => {
+        console.error(
+            `[jobs/${job.name}] Oops! Something wrong happened and the status couldn't be sent.`,
+            e,
+        );
+    },
+    name: "Ping and send",
+});
 
-// await masto.v1.statuses.create({
-//     visibility: "unlisted",
-//     status:
-// });
+console.log("Registered job:", checkJob);
+
+checkJob.schedule(async () => {
+    const message = await GenerateMessage();
+    if (!message) throw "Message was not generated";
+
+    console.log("About to send message:\n", message);
+
+    if (!env.DISABLE_MASTO) {
+        if (!env.ACCESS_TOKEN || !env.MASTODON_URL)
+            throw "Either MASTODON_URL or/and ACCESS_TOKEN are missing. Check your env file and try again.";
+        const masto = createRestAPIClient({
+            url: env.MASTODON_URL,
+            accessToken: env.ACCESS_TOKEN,
+        });
+        await masto.v1.statuses.create({
+            visibility: "unlisted",
+            status: message,
+        });
+    }
+});
