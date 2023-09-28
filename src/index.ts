@@ -16,6 +16,7 @@ const validInstances = [
     { name: "static", url: "https://static.revolt.chat/emoji/mutant/1f97a.svg?rev=3" },
     { name: "client", url: "https://app.revolt.chat" },
     { name: "landing", url: "https://revolt.chat" },
+    { name: "unknown", url: "https://github.com/amycatgirl/mastodon-revolt-status/pan" },
 ];
 
 type instance = (typeof validInstances)[number];
@@ -73,6 +74,8 @@ function GenerateReadableStatusCode(code: number) {
             return "Teapot :)";
         case 410:
             return "Gone :)";
+        case 404:
+            return "Not found >:(";
         default:
             throw "Idk, figure out";
     }
@@ -102,16 +105,26 @@ async function GenerateMessage() {
 
     console.log("Status array", statuses);
 
+    const unresponsiveServers = statuses.filter(v => v.status !== 200);
     const statusPerServer = statuses
         .map(
             value =>
-                `${value.instance.toUpperCase()}: ${GenerateReadableStatusCode(value.status)} in ${
-                    value.responseTime
-                }ms`,
+                `${value.instance.toUpperCase()}: ${GenerateReadableStatusCode(
+                    value.status,
+                )} (responded after ${value.responseTime}ms)`,
         )
         .join("\n");
 
-    return `#revoltchat server status:\n${statusPerServer}`;
+    console.log("debug:", unresponsiveServers);
+
+    const msg =
+        unresponsiveServers.length > 0
+            ? `revolt.chat is probably suffering a partial outage (${
+                  statuses.length - unresponsiveServers.length
+              } out of ${statuses.length} servers operational)`
+            : "All services are operational";
+
+    return `${msg}\n${statusPerServer}\n#revoltchat #rvltstatus`;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -143,4 +156,4 @@ checkJob.schedule(async () => {
     }
 });
 
-await checkJob.trigger();
+if (env.DISABLE_MASTO) await checkJob.trigger();
