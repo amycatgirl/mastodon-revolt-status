@@ -19,10 +19,20 @@ const validInstances = [
 ];
 
 type instance = (typeof validInstances)[number];
+
 interface responseInformation {
     status: number;
     responseTime: number;
 }
+
+if (!env.ACCESS_TOKEN || !env.MASTODON_URL)
+    throw "Either MASTODON_URL or/and ACCESS_TOKEN are missing. Check your env file and try again.";
+
+console.log(env.ACCESS_TOKEN, env.MASTODON_URL);
+const masto = createRestAPIClient({
+    url: env.MASTODON_URL,
+    accessToken: env.ACCESS_TOKEN,
+});
 
 async function PingServerWithResponseTime(
     server: string,
@@ -124,15 +134,13 @@ checkJob.schedule(async () => {
     console.log("About to send message:\n", message);
 
     if (!env.DISABLE_MASTO) {
-        if (!env.ACCESS_TOKEN || !env.MASTODON_URL)
-            throw "Either MASTODON_URL or/and ACCESS_TOKEN are missing. Check your env file and try again.";
-        const masto = createRestAPIClient({
-            url: env.MASTODON_URL,
-            accessToken: env.ACCESS_TOKEN,
-        });
-        await masto.v1.statuses.create({
+        const status = await masto.v1.statuses.create({
             visibility: "unlisted",
             status: message,
         });
+
+        console.log("Posted:", status);
     }
 });
+
+await checkJob.trigger();
