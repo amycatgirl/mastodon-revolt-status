@@ -16,7 +16,6 @@ const validInstances = [
     { name: "static", url: "https://static.revolt.chat/emoji/mutant/1f97a.svg?rev=3" },
     { name: "client", url: "https://app.revolt.chat" },
     { name: "landing", url: "https://revolt.chat" },
-    { name: "unknown", url: "https://github.com/amycatgirl/mastodon-revolt-status/pan" },
 ];
 
 type instance = (typeof validInstances)[number];
