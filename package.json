@@ -9,6 +9,10 @@
     "build": "tsc"
   },
   "keywords": [],
+  "engines": {
+    "node": "18.x"
+  },
+  "packageManager": "pnpm@8.7.6",
   "author": "",
   "license": "ISC",
   "dependencies": {
