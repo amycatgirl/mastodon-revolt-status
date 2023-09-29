@@ -28,7 +28,6 @@ interface responseInformation {
 if (!env.ACCESS_TOKEN || !env.MASTODON_URL)
     throw "Either MASTODON_URL or/and ACCESS_TOKEN are missing. Check your env file and try again.";
 
-console.log(env.ACCESS_TOKEN, env.MASTODON_URL);
 const masto = createRestAPIClient({
     url: env.MASTODON_URL,
     accessToken: env.ACCESS_TOKEN,
@@ -59,7 +58,7 @@ async function PingServerWithResponseTime(
     });
 }
 
-function GenerateReadableStatusCode(code: number) {
+function generateReadableStatusCode(code: number) {
     switch (code) {
         case 200:
             return "Ok";
@@ -80,27 +79,28 @@ function GenerateReadableStatusCode(code: number) {
     }
 }
 
-async function CheckServerStatus(serverToCheck: instance): Promise<responseInformation> {
-    const responseFromServer = await PingServerWithResponseTime(serverToCheck.url);
-
-    if (!responseFromServer) throw `Could not get a response from ${serverToCheck.name}`;
-
-    return responseFromServer;
+async function checkServerStatus(serverToCheck: instance): Promise<responseInformation> {
+    try {
+        return await PingServerWithResponseTime(serverToCheck.url);
+    } catch (e) {
+        throw `Could not get a response from ${serverToCheck.name}`;
+    }
 }
-
-async function GenerateMessage() {
+async function generateMessage() {
     console.log("Checking servers...");
-    const statuses: (responseInformation & { instance: string })[] | undefined = [];
-    for await (const instance of validInstances) {
-        await CheckServerStatus(instance).then(res => {
+
+    const statuses = await Promise.all(
+        validInstances.map(async instance => {
+            const res = await checkServerStatus(instance);
             console.log(instance.name, res);
-            statuses.push({
+
+            return {
                 instance: instance.name,
                 responseTime: res.responseTime,
                 status: res.status,
-            });
-        });
-    }
+            };
+        }),
+    );
 
     console.log("Status array", statuses);
 
@@ -108,7 +108,7 @@ async function GenerateMessage() {
     const statusPerServer = statuses
         .map(
             value =>
-                `${value.instance.toUpperCase()}: ${GenerateReadableStatusCode(
+                `${value.instance.toUpperCase()}: ${generateReadableStatusCode(
                     value.status,
                 )} (responded after ${value.responseTime}ms)`,
         )
@@ -140,18 +140,22 @@ const checkJob = Cron("@hourly", {
 console.log("Registered job:", checkJob);
 
 checkJob.schedule(async () => {
-    const message = await GenerateMessage();
-    if (!message) throw "Message was not generated";
+    try {
+        const message = await generateMessage();
+        if (!message) throw "Message was not generated";
 
-    console.log("About to send message:\n", message);
+        console.log("Generated Message:\n", message);
 
-    if (!env.DISABLE_MASTO) {
+        if (env.DISABLE_MASTO) return;
+
         const status = await masto.v1.statuses.create({
             visibility: "unlisted",
             status: message,
         });
 
         console.log("Posted:", status);
+    } catch (error) {
+        console.error("Error while scheduling checkJob:", error);
     }
 });
 
