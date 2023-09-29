@@ -28,7 +28,6 @@ interface responseInformation {
 if (!env.ACCESS_TOKEN || !env.MASTODON_URL)
     throw "Either MASTODON_URL or/and ACCESS_TOKEN are missing. Check your env file and try again.";
 
-console.log(env.ACCESS_TOKEN, env.MASTODON_URL);
 const masto = createRestAPIClient({
     url: env.MASTODON_URL,
     accessToken: env.ACCESS_TOKEN,
@@ -59,7 +58,7 @@ async function PingServerWithResponseTime(
     });
 }
 
-function GenerateReadableStatusCode(code: number) {
+function generateReadableStatusCode(code: number) {
     switch (code) {
         case 200:
             return "Ok";
@@ -80,33 +79,38 @@ function GenerateReadableStatusCode(code: number) {
     }
 }
 
-async function CheckServerStatus(serverToCheck: instance): Promise<responseInformation> {
-    const responseFromServer = await PingServerWithResponseTime(serverToCheck.url);
-
-    if (!responseFromServer) throw `Could not get a response from ${serverToCheck.name}`;
-
-    return responseFromServer;
+async function checkServerStatus(serverToCheck: instance): Promise<responseInformation> {
+    try {
+        return await PingServerWithResponseTime(serverToCheck.url);
+    } catch (e) {
+        throw `Could not get a response from ${serverToCheck.name}`;
+    }
 }
 async function generateMessage() {
     console.log("Checking servers...");
-    
-    const statuses = await Promise.all(validInstances.map(async (instance) => {
-        const res = await checkServerStatus(instance);
-        console.log(instance.name, res);
 
-        return {
-            instance: instance.name,
-            responseTime: res.responseTime,
-            status: res.status,
-        };
-    }));
+    const statuses = await Promise.all(
+        validInstances.map(async instance => {
+            const res = await checkServerStatus(instance);
+            console.log(instance.name, res);
+
+            return {
+                instance: instance.name,
+                responseTime: res.responseTime,
+                status: res.status,
+            };
+        }),
+    );
 
     console.log("Status array", statuses);
 
     const unresponsiveServers = statuses.filter(v => v.status !== 200);
     const statusPerServer = statuses
-        .map(value =>
-            `${value.instance.toUpperCase()}: ${generateReadableStatusCode(value.status)} (responded after ${value.responseTime}ms)`
+        .map(
+            value =>
+                `${value.instance.toUpperCase()}: ${generateReadableStatusCode(
+                    value.status,
+                )} (responded after ${value.responseTime}ms)`,
         )
         .join("\n");
 
@@ -115,8 +119,8 @@ async function generateMessage() {
     const msg =
         unresponsiveServers.length > 0
             ? `revolt.chat is probably suffering a partial outage (${
-                statuses.length - unresponsiveServers.length
-            } out of ${statuses.length} servers operational)`
+                  statuses.length - unresponsiveServers.length
+              } out of ${statuses.length} servers operational)`
             : "All services are operational";
 
     return `${msg}\n${statusPerServer}\n#revoltchat #rvltstatus`;
@@ -140,20 +144,19 @@ checkJob.schedule(async () => {
         const message = await generateMessage();
         if (!message) throw "Message was not generated";
 
-        console.log("About to send message:\n", message);
+        console.log("Generated Message:\n", message);
 
-        if (!env.DISABLE_MASTO) {
-            const status = await masto.v1.statuses.create({
-                visibility: "unlisted",
-                status: message,
-            });
+        if (env.DISABLE_MASTO) return;
 
-            console.log("Posted:", status);
-        }
+        const status = await masto.v1.statuses.create({
+            visibility: "unlisted",
+            status: message,
+        });
+
+        console.log("Posted:", status);
     } catch (error) {
         console.error("Error while scheduling checkJob:", error);
     }
 });
-
 
 if (env.DISABLE_MASTO) await checkJob.trigger();
