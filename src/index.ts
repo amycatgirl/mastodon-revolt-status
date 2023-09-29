@@ -87,30 +87,26 @@ async function CheckServerStatus(serverToCheck: instance): Promise<responseInfor
 
     return responseFromServer;
 }
-
-async function GenerateMessage() {
+async function generateMessage() {
     console.log("Checking servers...");
-    const statuses: (responseInformation & { instance: string })[] | undefined = [];
-    for await (const instance of validInstances) {
-        await CheckServerStatus(instance).then(res => {
-            console.log(instance.name, res);
-            statuses.push({
-                instance: instance.name,
-                responseTime: res.responseTime,
-                status: res.status,
-            });
-        });
-    }
+    
+    const statuses = await Promise.all(validInstances.map(async (instance) => {
+        const res = await checkServerStatus(instance);
+        console.log(instance.name, res);
+
+        return {
+            instance: instance.name,
+            responseTime: res.responseTime,
+            status: res.status,
+        };
+    }));
 
     console.log("Status array", statuses);
 
     const unresponsiveServers = statuses.filter(v => v.status !== 200);
     const statusPerServer = statuses
-        .map(
-            value =>
-                `${value.instance.toUpperCase()}: ${GenerateReadableStatusCode(
-                    value.status,
-                )} (responded after ${value.responseTime}ms)`,
+        .map(value =>
+            `${value.instance.toUpperCase()}: ${generateReadableStatusCode(value.status)} (responded after ${value.responseTime}ms)`
         )
         .join("\n");
 
@@ -119,8 +115,8 @@ async function GenerateMessage() {
     const msg =
         unresponsiveServers.length > 0
             ? `revolt.chat is probably suffering a partial outage (${
-                  statuses.length - unresponsiveServers.length
-              } out of ${statuses.length} servers operational)`
+                statuses.length - unresponsiveServers.length
+            } out of ${statuses.length} servers operational)`
             : "All services are operational";
 
     return `${msg}\n${statusPerServer}\n#revoltchat #rvltstatus`;
@@ -140,19 +136,24 @@ const checkJob = Cron("@hourly", {
 console.log("Registered job:", checkJob);
 
 checkJob.schedule(async () => {
-    const message = await GenerateMessage();
-    if (!message) throw "Message was not generated";
+    try {
+        const message = await generateMessage();
+        if (!message) throw "Message was not generated";
 
-    console.log("About to send message:\n", message);
+        console.log("About to send message:\n", message);
 
-    if (!env.DISABLE_MASTO) {
-        const status = await masto.v1.statuses.create({
-            visibility: "unlisted",
-            status: message,
-        });
+        if (!env.DISABLE_MASTO) {
+            const status = await masto.v1.statuses.create({
+                visibility: "unlisted",
+                status: message,
+            });
 
-        console.log("Posted:", status);
+            console.log("Posted:", status);
+        }
+    } catch (error) {
+        console.error("Error while scheduling checkJob:", error);
     }
 });
+
 
 if (env.DISABLE_MASTO) await checkJob.trigger();
