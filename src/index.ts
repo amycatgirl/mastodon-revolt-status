@@ -1,6 +1,5 @@
 import { createRestAPIClient } from "masto";
-import { Cron } from "croner";
-import * as process from "process";
+import { getReasonPhrase } from "http-status-codes";
 
 const env: NodeJS.ProcessEnv & {
     ACCESS_TOKEN?: string;
@@ -58,27 +57,6 @@ async function PingServerWithResponseTime(
     });
 }
 
-function generateReadableStatusCode(code: number) {
-    switch (code) {
-        case 200:
-            return "Ok";
-        case 500:
-            return "Internal Server Error";
-        case 502:
-            return "Bad Gateway";
-        case 504:
-            return "Gateway Timeout";
-        case 418:
-            return "Teapot :)";
-        case 410:
-            return "Gone :)";
-        case 404:
-            return "Not found >:(";
-        default:
-            throw "Idk, figure out";
-    }
-}
-
 async function checkServerStatus(serverToCheck: instance): Promise<responseInformation> {
     try {
         return await PingServerWithResponseTime(serverToCheck.url);
@@ -108,7 +86,7 @@ async function generateMessage() {
     const statusPerServer = statuses
         .map(
             value =>
-                `${value.instance.toUpperCase()}: ${generateReadableStatusCode(
+                `${value.instance.toUpperCase()}: ${getReasonPhrase(
                     value.status,
                 )} (responded after ${value.responseTime}ms)`,
         )
@@ -126,20 +104,8 @@ async function generateMessage() {
     return `${msg}\n${statusPerServer}\n#revoltchat #rvltstatus`;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const checkJob = Cron("@hourly", {
-    catch: (e, job) => {
-        console.error(
-            `[jobs/${job.name}] Oops! Something wrong happened and the status couldn't be sent.`,
-            e,
-        );
-    },
-    name: "Ping and send",
-});
 
-console.log("Registered job:", checkJob);
-
-checkJob.schedule(async () => {
+async () => {
     try {
         const message = await generateMessage();
         if (!message) throw "Message was not generated";
@@ -157,6 +123,5 @@ checkJob.schedule(async () => {
     } catch (error) {
         console.error("Error while scheduling checkJob:", error);
     }
-});
+}
 
-if (env.DISABLE_MASTO) await checkJob.trigger();
