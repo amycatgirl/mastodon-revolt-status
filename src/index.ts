@@ -96,32 +96,27 @@ async function generateMessage() {
 
     const msg =
         unresponsiveServers.length > 0
-            ? `revolt.chat is probably suffering a partial outage (${
-                  statuses.length - unresponsiveServers.length
-              } out of ${statuses.length} servers operational)`
+            ? `revolt.chat is probably suffering a partial outage (${statuses.length - unresponsiveServers.length
+            } out of ${statuses.length} servers operational)`
             : "All services are operational";
 
     return `${msg}\n${statusPerServer}\n#revoltchat #rvltstatus`;
 }
 
 
-async () => {
-    try {
-        const message = await generateMessage();
-        if (!message) throw "Message was not generated";
+generateMessage().then(message => {
+    if (!message) throw "Message was not generated";
 
-        console.log("Generated Message:\n", message);
+    console.log("Generated Message:\n", message);
 
-        if (env.DISABLE_MASTO) return;
+    if (env.DISABLE_MASTO) { process.exit(1) };
 
-        const status = await masto.v1.statuses.create({
-            visibility: "unlisted",
-            status: message,
-        });
-
+    masto.v1.statuses.create({
+        visibility: "unlisted",
+        status: message,
+    }).then((status) => {
         console.log("Posted:", status);
-    } catch (error) {
-        console.error("Error while scheduling checkJob:", error);
-    }
-}
-
+    }).catch(() => {
+        console.error("Failed to send status :C");
+    });
+});
