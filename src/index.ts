@@ -22,6 +22,7 @@ type instance = (typeof validInstances)[number];
 interface responseInformation {
     status: number;
     responseTime: number;
+    error?: string;
 }
 
 if (!env.ACCESS_TOKEN || !env.MASTODON_URL)
@@ -61,7 +62,11 @@ async function checkServerStatus(serverToCheck: instance): Promise<responseInfor
     try {
         return await PingServerWithResponseTime(serverToCheck.url);
     } catch (e) {
-        throw `Could not get a response from ${serverToCheck.name}`;
+        return {
+            status: 504,
+            responseTime: 5000,
+            error: "Timeout"
+        };
     }
 }
 async function generateMessage() {
@@ -74,8 +79,7 @@ async function generateMessage() {
 
             return {
                 instance: instance.name,
-                responseTime: res.responseTime,
-                status: res.status,
+                ...res
             };
         }),
     );
@@ -85,10 +89,14 @@ async function generateMessage() {
     const unresponsiveServers = statuses.filter(v => v.status !== 200);
     const statusPerServer = statuses
         .map(
-            value =>
-                `${value.instance.toUpperCase()}: ${getReasonPhrase(
+            value => {
+                if (!value.error) return `${value.instance.toUpperCase()}: ${getReasonPhrase(
                     value.status,
-                )} (responded after ${value.responseTime}ms)`,
+                )} (responded after ${value.responseTime}ms)`
+
+                return `${value.instance.toUpperCase()}: ${value.error} (Could not get a response after ${value.responseTime})`
+            
+        }
         )
         .join("\n");
 
