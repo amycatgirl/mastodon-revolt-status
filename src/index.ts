@@ -35,7 +35,7 @@ const masto = createRestAPIClient({
 
 async function PingServerWithResponseTime(
     server: string,
-    timeout = 5000,
+    timeout = 10000,
 ): Promise<responseInformation> {
     const controller: AbortController = new AbortController();
     let startTime = 0;
@@ -64,7 +64,7 @@ async function checkServerStatus(serverToCheck: instance): Promise<responseInfor
     } catch (e) {
         return {
             status: 504,
-            responseTime: 5000,
+            responseTime: 10000,
             error: "Timeout"
         };
     }
