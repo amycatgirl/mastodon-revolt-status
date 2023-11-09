@@ -9,13 +9,13 @@ const env: NodeJS.ProcessEnv & {
 } = process.env;
 
 const validInstances = [
-    { name: "vortex", url: "https://vortex.revolt.chat" },
-    { name: "delta", url: "https://api.revolt.chat" },
-    { name: "autumn", url: "https://autumn.revolt.chat" },
-    { name: "january", url: "https://jan.revolt.chat" },
-    { name: "static", url: "https://static.revolt.chat/emoji/mutant/1f97a.svg?rev=3" },
-    { name: "client", url: "https://app.revolt.chat" },
-    { name: "landing", url: "https://revolt.chat" },
+    { name: "Voice", url: "https://vortex.revolt.chat" },
+    { name: "API", url: "https://api.revolt.chat" },
+    { name: "CDN", url: "https://autumn.revolt.chat" },
+    { name: "Image proxy", url: "https://jan.revolt.chat" },
+    { name: "Static resources", url: "https://static.revolt.chat/emoji/mutant/1f97a.svg?rev=3" },
+    { name: "Client", url: "https://app.revolt.chat" },
+    { name: "Landing page", url: "https://revolt.chat" },
 ];
 
 type instance = (typeof validInstances)[number];
@@ -93,9 +93,9 @@ async function generateMessage() {
     const statusPerServer = statuses
         .map(value => {
             if (!value.error)
-                return `${value.instance.toUpperCase()}: ${getReasonPhrase(
-                    value.status,
-                )} (response time: ${value.responseTime}ms)`;
+                return `${value.instance}: ${getReasonPhrase(value.status)} (response time: ${
+                    value.responseTime
+                }ms)`;
 
             return `${value.instance.toUpperCase()}: ${
                 value.error
