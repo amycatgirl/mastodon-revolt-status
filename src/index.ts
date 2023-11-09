@@ -9,11 +9,11 @@ const env: NodeJS.ProcessEnv & {
 } = process.env;
 
 const validInstances = [
-    { name: "Voice", url: "https://vortex.revolt.chat" },
+    { name: "Voice (Vortex)", url: "https://vortex.revolt.chat" },
     { name: "API", url: "https://api.revolt.chat" },
-    { name: "CDN", url: "https://autumn.revolt.chat" },
-    { name: "Image proxy", url: "https://jan.revolt.chat" },
-    { name: "Static resources", url: "https://static.revolt.chat/emoji/mutant/1f97a.svg?rev=3" },
+    { name: "CDN (Autumn)", url: "https://autumn.revolt.chat" },
+    { name: "Image proxy (January)", url: "https://jan.revolt.chat" },
+    { name: "Static resources (including Mutant Emoji)", url: "https://static.revolt.chat/emoji/mutant/1f97a.svg?rev=3" },
     { name: "Client", url: "https://app.revolt.chat" },
     { name: "Landing page", url: "https://revolt.chat" },
 ];
@@ -27,7 +27,7 @@ interface responseInformation {
 }
 
 if ((!env.ACCESS_TOKEN || !env.MASTODON_URL) && !env.DISABLE_MASTO)
-    throw "Either MASTODON_URL or/and ACCESS_TOKEN are missing. Check your env file and try again.";
+    throw "You haven't specified a MASTODON_URL or an ACCESS_TOKEN. Check your .env file and try again.";
 
 const masto = createRestAPIClient({
     url: env.MASTODON_URL || "",
@@ -109,8 +109,8 @@ async function generateMessage() {
             : unresponsiveServers.length > 2
             ? `revolt.chat is probably suffering a partial outage (${
                   statuses.length - unresponsiveServers.length
-              } out of ${statuses.length} servers operational)`
-            : "All services are operational";
+              } out of ${statuses.length} services operational)`
+            : "All services are operational.";
 
     return `${msg}\n${statusPerServer}\n#revoltchat #rvltstatus`;
 }
