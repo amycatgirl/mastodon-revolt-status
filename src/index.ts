@@ -5,6 +5,7 @@ const env: NodeJS.ProcessEnv & {
     ACCESS_TOKEN?: string;
     MASTODON_URL?: string;
     DISABLE_MASTO?: boolean;
+    FAIL_EVERYTHING?: boolean;
 } = process.env;
 
 const validInstances = [
@@ -25,12 +26,12 @@ interface responseInformation {
     error?: string;
 }
 
-if (!env.ACCESS_TOKEN || !env.MASTODON_URL)
+if ((!env.ACCESS_TOKEN || !env.MASTODON_URL) && !env.DISABLE_MASTO)
     throw "Either MASTODON_URL or/and ACCESS_TOKEN are missing. Check your env file and try again.";
 
 const masto = createRestAPIClient({
-    url: env.MASTODON_URL,
-    accessToken: env.ACCESS_TOKEN,
+    url: env.MASTODON_URL || "",
+    accessToken: env.ACCESS_TOKEN || "",
 });
 
 async function PingServerWithResponseTime(
@@ -48,8 +49,12 @@ async function PingServerWithResponseTime(
 
     startTime = Date.now();
 
+    if (env.FAIL_EVERYTHING) throw ":3";
+
     return await fetch(server, { signal: controller.signal }).then(res => {
         clearTimeout(timeoutID);
+
+        console.log("dev: Got response from", server);
 
         return {
             status: res.status,
@@ -65,66 +70,69 @@ async function checkServerStatus(serverToCheck: instance): Promise<responseInfor
         return {
             status: 504,
             responseTime: 10000,
-            error: "Timeout"
+            error: "Timeout",
         };
     }
 }
 async function generateMessage() {
-    console.log("Checking servers...");
+    console.log("dev: Checking servers...");
 
     const statuses = await Promise.all(
         validInstances.map(async instance => {
             const res = await checkServerStatus(instance);
-            console.log(instance.name, res);
 
             return {
                 instance: instance.name,
-                ...res
+                ...res,
             };
         }),
     );
 
-    console.log("Status array", statuses);
-
     const unresponsiveServers = statuses.filter(v => v.status !== 200);
-    const statusPerServer = statuses
-        .map(
-            value => {
-                if (!value.error) return `${value.instance.toUpperCase()}: ${getReasonPhrase(
-                    value.status,
-                )} (responded after ${value.responseTime}ms)`
 
-                return `${value.instance.toUpperCase()}: ${value.error} (Could not get a response after ${value.responseTime})`
-            
-        }
-        )
+    const statusPerServer = statuses
+        .map(value => {
+            if (!value.error)
+                return `${value.instance.toUpperCase()}: ${getReasonPhrase(
+                    value.status,
+                )} (response time: ${value.responseTime}ms)`;
+
+            return `${value.instance.toUpperCase()}: ${
+                value.error
+            } (Could not get a response after ${value.responseTime * 1000} seconds)`;
+        })
         .join("\n");
 
-    console.log("debug:", unresponsiveServers);
-
     const msg =
-        unresponsiveServers.length > 0
-            ? `revolt.chat is probably suffering a partial outage (${statuses.length - unresponsiveServers.length
-            } out of ${statuses.length} servers operational)`
+        unresponsiveServers.length >= validInstances.length - 1
+            ? `⚠️ revolt.chat is suffering a full outage ⚠️`
+            : unresponsiveServers.length > 2
+            ? `revolt.chat is probably suffering a partial outage (${
+                  statuses.length - unresponsiveServers.length
+              } out of ${statuses.length} servers operational)`
             : "All services are operational";
 
     return `${msg}\n${statusPerServer}\n#revoltchat #rvltstatus`;
 }
 
-
 generateMessage().then(message => {
     if (!message) throw "Message was not generated";
 
-    console.log("Generated Message:\n", message);
+    console.log(`dev: Generated Message:\n${message}`);
 
-    if (env.DISABLE_MASTO) { process.exit(1) };
+    if (env.DISABLE_MASTO) {
+        process.exit(1);
+    }
 
-    masto.v1.statuses.create({
-        visibility: "unlisted",
-        status: message,
-    }).then((status) => {
-        console.log("Posted:", status);
-    }).catch(() => {
-        console.error("Failed to send status :C");
-    });
+    masto.v1.statuses
+        .create({
+            visibility: "unlisted",
+            status: message,
+        })
+        .then(status => {
+            console.log("Posted:", status);
+        })
+        .catch(() => {
+            console.error("Failed to send status :C");
+        });
 });
