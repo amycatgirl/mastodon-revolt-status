@@ -99,7 +99,7 @@ async function generateMessage() {
 
             return `${value.instance.toUpperCase()}: ${
                 value.error
-            } (Could not get a response after ${value.responseTime * 1000} seconds)`;
+            } (Could not get a response after ${value.responseTime / 1000} seconds)`;
         })
         .join("\n");
 
