@@ -30,8 +30,8 @@ const validInstances = [
 ];
 
 /**
- * @param {Instance} [service]
- * @param {number?} [timeout=10000] Time to wait until giving up
+ * @param [service]
+ * @param [timeout=10000] Time to wait until giving up
  */
 async function PingServiceWithResponseTime(
   service: Instance,

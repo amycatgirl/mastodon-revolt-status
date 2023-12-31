@@ -1,6 +1,7 @@
 import { mastodon } from "masto";
 import { env } from "process";
 import { ServicePingResponse, checkServerStatus, validInstances } from "./instances.js";
+import { friendlyCode } from "./codes.js";
 
 /**
  * Name of the website/project
@@ -31,7 +32,7 @@ const hashtags = ["rvltstatus", "revoltchat"];
 function composeStatusMessage(valid: number, down: number): string {
 	if (down >= valid) {
 		return `${websiteName} ${fullOutage}`
-	} else if (down > 2) {
+	} else if (down >= 1) {
 		return `${websiteName} ${partialOutage} (${valid - down}/${valid})`;
 	} else {
 		return "All services operational."
@@ -43,7 +44,7 @@ function composeResponseMessage(service: ServicePingResponse): string {
 	if (service.didTimeout) {
 		return `${service.name}: Response timed out.`
 	} else {
-		return `${service.name}: ${service.statusCode} (took ${service.responseTime}ms)`
+		return `${service.name}: ${friendlyCode(service.statusCode!)} (took ${service.responseTime}ms)`
 	}
 }
 
