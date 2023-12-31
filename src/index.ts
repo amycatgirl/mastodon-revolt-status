@@ -28,7 +28,7 @@ interface responseInformation {
     error?: string;
 }
 
-if ((!env.ACCESS_TOKEN || !env.MASTODON_URL) && !env.DISABLE_MASTO)
+if (!env.DISABLE_MASTO && (!env.ACCESS_TOKEN || !env.MASTODON_URL))
     throw "You haven't specified a MASTODON_URL or an ACCESS_TOKEN. Check your .env file and try again.";
 
 const masto = createRestAPIClient({
@@ -94,14 +94,18 @@ async function generateMessage() {
 
     const statusPerServer = statuses
         .map(value => {
-            if (!value.error)
-                return `${value.instance}: ${getReasonPhrase(value.status)} (response time: ${
-                    value.responseTime
-                }ms)`;
-
-            return `${value.instance.toUpperCase()}: ${
-                value.error
-            } (Could not get a response after ${value.responseTime / 1000} seconds)`;
+            try {
+                if (!value.error)
+                    return `${value.instance}: ${getReasonPhrase(value.status)} (response time: ${
+                        value.responseTime
+                    }ms)`;
+                return `${value.instance.toUpperCase()}: ${
+                    value.error
+                } (Could not get a response after ${value.responseTime / 1000} seconds)`;
+            
+            } catch (error) {
+                return `${value.instance}: ${value.status} (response time ${value.responseTime}ms)`
+            }
         })
         .join("\n");
 
