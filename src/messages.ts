@@ -55,7 +55,7 @@ async function generateMessage() {
     validInstances.map(async instance => await checkServerStatus(instance)),
   );
 
-  const unresponsiveServers = statuses.filter(v => v.statusCode !== 200);
+  const unresponsiveServers = statuses.filter(v => v.didTimeout || v.statusCode !== 200);
 
   const statusPerServer = statuses
     .map(composeResponseMessage)
