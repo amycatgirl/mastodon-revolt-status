@@ -1,144 +1,105 @@
 import { createRestAPIClient } from "masto";
 import { getReasonPhrase } from "http-status-codes";
+import { validInstances } from "./instances.js";
+import { ServicePingResponse, composeResponseMessage, composeStatusMessage } from "./messages.js";
 
 const env: NodeJS.ProcessEnv & {
-    ACCESS_TOKEN?: string;
-    MASTODON_URL?: string;
-    DISABLE_MASTO?: boolean;
-    FAIL_EVERYTHING?: boolean;
+  ACCESS_TOKEN?: string;
+  MASTODON_URL?: string;
+  DISABLE_MASTO?: boolean;
+  FAIL_EVERYTHING?: boolean;
 } = process.env;
-
-const validInstances = [
-    { name: "Client", url: "https://app.revolt.chat" },
-    { name: "API", url: "https://api.revolt.chat" },
-    { name: "CDN (Autumn)", url: "https://autumn.revolt.chat" },
-    { name: "Voice (Vortex)", url: "https://vortex.revolt.chat" },
-    { name: "Image proxy (January)", url: "https://jan.revolt.chat" },
-    { name: "Static resources (including Mutant Emoji)", url: "https://static.revolt.chat/emoji/mutant/1f97a.svg?rev=3" },
-    { name: "Landing page", url: "https://revolt.chat" },
-    { name: "Help desk (Zammad)", url: "https://help.revolt.chat" },
-    { name: "Weblate", url: "https://translate.revolt.chat" },
-];
 
 type instance = (typeof validInstances)[number];
 
-interface responseInformation {
-    status: number;
-    responseTime: number;
-    error?: string;
-}
-
 if (!env.DISABLE_MASTO && (!env.ACCESS_TOKEN || !env.MASTODON_URL))
-    throw "You haven't specified a MASTODON_URL or an ACCESS_TOKEN. Check your .env file and try again.";
+  throw "You haven't specified a MASTODON_URL or an ACCESS_TOKEN. Check your .env file and try again.";
 
 const masto = createRestAPIClient({
-    url: env.MASTODON_URL || "",
-    accessToken: env.ACCESS_TOKEN || "",
+  url: env.MASTODON_URL || "",
+  accessToken: env.ACCESS_TOKEN || "",
 });
 
 async function PingServerWithResponseTime(
-    server: string,
-    timeout = 10000,
-): Promise<responseInformation> {
-    const controller: AbortController = new AbortController();
-    let startTime = 0;
+  server: string,
+  timeout = 10000,
+): Promise<Pick<ServicePingResponse, "statusCode" | "responseTime">> {
+  const controller: AbortController = new AbortController();
+  let startTime = 0;
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const timeoutID = setTimeout(
-        () => controller.abort("Request timed out...\nIs the website down?"),
-        timeout,
-    );
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const timeoutID = setTimeout(
+    () => controller.abort("Request timed out...\nIs the website down?"),
+    timeout,
+  );
 
-    startTime = Date.now();
+  startTime = Date.now();
 
-    if (env.FAIL_EVERYTHING) throw ":3";
+  if (env.FAIL_EVERYTHING) throw ":3";
 
-    return await fetch(server, { signal: controller.signal }).then(res => {
-        clearTimeout(timeoutID);
+  return await fetch(server, { signal: controller.signal }).then(res => {
+    clearTimeout(timeoutID);
 
-        console.log("dev: Got response from", server);
+    console.log("dev: Got response from", server);
 
-        return {
-            status: res.status,
-            responseTime: Date.now() - startTime,
-        };
-    });
+    return {
+      statusCode: res.status,
+      responseTime: Date.now() - startTime,
+    };
+  });
 }
 
-async function checkServerStatus(serverToCheck: instance): Promise<responseInformation> {
-    try {
-        return await PingServerWithResponseTime(serverToCheck.url);
-    } catch (e) {
-        return {
-            status: 504,
-            responseTime: 10000,
-            error: "Timeout",
-        };
+async function checkServerStatus(serverToCheck: instance): Promise<ServicePingResponse> {
+  try {
+    const responseFromService = await PingServerWithResponseTime(serverToCheck.url);
+    return {
+      name: serverToCheck.name,
+      didTimeout: false,
+      ...responseFromService
     }
+  } catch (e) {
+    return {
+      name: serverToCheck.name,
+      didTimeout: true
+    };
+  }
 }
 async function generateMessage() {
-    console.log("dev: Checking servers...");
+  console.log("dev: Checking servers...");
 
-    const statuses = await Promise.all(
-        validInstances.map(async instance => {
-            const res = await checkServerStatus(instance);
+  const statuses = await Promise.all(
+    validInstances.map(async instance => await checkServerStatus(instance)),
+  );
 
-            return {
-                instance: instance.name,
-                ...res,
-            };
-        }),
-    );
+  const unresponsiveServers = statuses.filter(v => v.statusCode !== 200);
 
-    const unresponsiveServers = statuses.filter(v => v.status !== 200);
+  const statusPerServer = statuses
+    .map(composeResponseMessage)
+    .join("\n");
 
-    const statusPerServer = statuses
-        .map(value => {
-            try {
-                if (!value.error)
-                    return `${value.instance}: ${getReasonPhrase(value.status)} (response time: ${
-                        value.responseTime
-                    }ms)`;
-                return `${value.instance.toUpperCase()}: ${
-                    value.error
-                } (Could not get a response after ${value.responseTime / 1000} seconds)`;
-            
-            } catch (error) {
-                return `${value.instance}: ${value.status} (response time ${value.responseTime}ms)`
-            }
-        })
-        .join("\n");
+  const msg = composeStatusMessage(validInstances.length, unresponsiveServers.length);
 
-    const msg =
-        unresponsiveServers.length >= validInstances.length - 1
-            ? `⚠️ revolt.chat is suffering a full outage ⚠️`
-            : unresponsiveServers.length > 2
-            ? `revolt.chat is probably suffering a partial outage (${
-                  statuses.length - unresponsiveServers.length
-              } out of ${statuses.length} services operational)`
-            : "All services are operational.";
-
-    return `${msg}\n${statusPerServer}\n#revoltchat #rvltstatus`;
+  return `${msg}\n${statusPerServer}\n#revoltchat #rvltstatus`;
 }
 
 generateMessage().then(message => {
-    if (!message) throw "Message was not generated";
+  if (!message) throw "Message was not generated";
 
-    console.log(`dev: Generated Message:\n${message}`);
+  console.log(`dev: Generated Message:\n${message}`);
 
-    if (env.DISABLE_MASTO) {
-        process.exit(1);
-    }
+  if (env.DISABLE_MASTO) {
+    process.exit(1);
+  }
 
-    masto.v1.statuses
-        .create({
-            visibility: "unlisted",
-            status: message,
-        })
-        .then(status => {
-            console.log("Posted:", status);
-        })
-        .catch(() => {
-            console.error("Failed to send status :C");
-        });
+  masto.v1.statuses
+    .create({
+      visibility: "unlisted",
+      status: message,
+    })
+    .then(() => {
+      console.log("Succesfully sent the toot!");
+    })
+    .catch(() => {
+      console.error("Failed to send toot, aborting...");
+    });
 });
