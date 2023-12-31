@@ -25,14 +25,12 @@ async function PingServerWithResponseTime(
   timeout = 10000,
 ): Promise<Pick<ServicePingResponse, "statusCode" | "responseTime">> {
   const controller: AbortController = new AbortController();
-  let startTime = 0;
+  let startTime = Date.now();
 
   const timeoutID = setTimeout(
     () => controller.abort("Request timed out...\nIs the website down?"),
     timeout,
   );
-
-  startTime = Date.now();
 
   if (env.FAIL_EVERYTHING) throw ":3";
 
