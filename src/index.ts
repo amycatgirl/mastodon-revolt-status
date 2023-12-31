@@ -27,7 +27,6 @@ async function PingServerWithResponseTime(
   const controller: AbortController = new AbortController();
   let startTime = 0;
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const timeoutID = setTimeout(
     () => controller.abort("Request timed out...\nIs the website down?"),
     timeout,
