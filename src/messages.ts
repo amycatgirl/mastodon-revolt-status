@@ -18,6 +18,11 @@ const partialOutage = "is suffering a partial outage";
 const fullOutage = "is completely down";
 
 /**
+ * Hashtags to include with the toot
+ */
+const hashtags = ["rvltstatus", "revoltchat"];
+
+/**
  * @param {number} [valid] Number of services that were pinged
  * @param {number} [down] Number of services that returned a status code higher than 200
  * @returns {string} Return the current status of all servers
@@ -56,8 +61,9 @@ async function generateMessage() {
     .join("\n");
 
   const msg = composeStatusMessage(validInstances.length, unresponsiveServers.length);
-
-  return `${msg}\n${statusPerServer}\n#revoltchat #rvltstatus`;
+	const tags = hashtags.map(ht => `#${ht}`).join(" ");
+	
+  return `${msg}\n${statusPerServer}\n${tags}`;
 }
 
 
