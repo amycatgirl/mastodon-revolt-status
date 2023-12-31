@@ -1,3 +1,7 @@
+import { mastodon } from "masto";
+import { env } from "process";
+import { ServicePingResponse, checkServerStatus, validInstances } from "./instances.js";
+
 /**
  * Name of the website/project
  */
@@ -29,19 +33,6 @@ function composeStatusMessage(valid: number, down: number): string {
 	}
 }
 
-/**
- * Information recieved with the ping
- */
-type ServicePingResponse = {
-	/** Name of the service */
-	name: string,
-	/** Recieved status code */
-	statusCode?: number,
-	/** Time taken to respond */
-	responseTime?: number,
-	/** Whether the response timed out */
-	didTimeout: Boolean
-}
 
 function composeResponseMessage(service: ServicePingResponse): string {
 	if (service.didTimeout) {
@@ -51,6 +42,52 @@ function composeResponseMessage(service: ServicePingResponse): string {
 	}
 }
 
+async function generateMessage() {
+  console.log("dev: Checking servers...");
 
-export { composeStatusMessage, composeResponseMessage };
+  const statuses = await Promise.all(
+    validInstances.map(async instance => await checkServerStatus(instance)),
+  );
+
+  const unresponsiveServers = statuses.filter(v => v.statusCode !== 200);
+
+  const statusPerServer = statuses
+    .map(composeResponseMessage)
+    .join("\n");
+
+  const msg = composeStatusMessage(validInstances.length, unresponsiveServers.length);
+
+  return `${msg}\n${statusPerServer}\n#revoltchat #rvltstatus`;
+}
+
+
+async function generateMessageAndSend(client: mastodon.rest.Client["v1"], attempts: number = 1) {
+	try {
+		const message = await generateMessage()
+
+		console.log("I've generated this message:\n\n", message);
+
+		if (!message || env.DISABLE_MASTO) {
+			process.exit(1);
+		}
+
+		client.statuses.create({
+			visibility: "unlisted",
+			status: message
+		})
+	} catch (error) {
+		console.error("An error has occurred:\n\n", error);
+		if (attempts >= 5) {
+			console.error("Aborting...")
+			process.exit(1);
+		}
+
+		console.error("Retrying...");
+
+		generateMessageAndSend(client, attempts);
+	}
+}
+
+
+export { composeStatusMessage, composeResponseMessage, generateMessageAndSend };
 export type { ServicePingResponse };
