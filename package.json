@@ -18,7 +18,8 @@
   "dependencies": {
     "croner": "^7.0.4",
     "http-status-codes": "^2.3.0",
-    "masto": "^6.4.2"
+    "masto": "^6.4.2",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/node": "^20.9.0",
